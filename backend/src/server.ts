@@ -36,7 +36,7 @@ const gapHistoryService = new GapHistoryService()
 
 // REST API
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() })
+  res.json({ status: 'ok' })
 })
 
 app.get('/api/prices', (req, res) => {
