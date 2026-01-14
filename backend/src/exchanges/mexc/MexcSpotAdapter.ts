@@ -18,7 +18,6 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
         console.log('[MexcSpot] 연결됨')
         this.connected = true
 
-        // MEXC requires ping every 30 seconds
         this.pingInterval = setInterval(() => {
           if (this.ws?.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ method: 'PING' }))
@@ -32,35 +31,13 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
         try {
           const msg = JSON.parse(data.toString())
 
-          // Handle mini ticker format
-          if (msg.c && msg.s) {
-            // Format: { s: "BTCUSDT", p: "0.00123", ... }
-            const symbol = msg.s?.replace('USDT', '')
+          // MEXC miniTicker format: { d: { s: "BTCUSDT", c: "123.45", ... } }
+          if (msg.d && typeof msg.d === 'object') {
+            const d = msg.d
+            const symbol = d.s?.replace('USDT', '')
 
             if (symbol && this.subscribedSymbols.includes(symbol)) {
-              const price = parseFloat(msg.c || msg.p || '0')
-              if (price > 0) {
-                this.emitTicker({
-                  exchange: this.exchange,
-                  marketType: this.marketType,
-                  symbol,
-                  baseCurrency: 'USDT',
-                  bid: price * this.exchangeRate,
-                  ask: price * this.exchangeRate,
-                  last: price * this.exchangeRate,
-                  lastOriginal: price,
-                  volume24h: parseFloat(msg.v || '0'),
-                  timestamp: Date.now()
-                })
-              }
-            }
-          }
-
-          // Handle subscription response with data
-          if (msg.d && msg.s) {
-            const symbol = msg.s?.replace('USDT', '')
-            if (symbol && this.subscribedSymbols.includes(symbol)) {
-              const price = parseFloat(msg.d.c || msg.d.p || '0')
+              const price = parseFloat(d.c || d.p || '0')
               if (price > 0) {
                 this.emitTicker({
                   exchange: this.exchange,
@@ -76,19 +53,33 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
               }
             }
           }
-        } catch {
-          // Skip parse errors
-        }
+
+          // Direct format: { s: "BTCUSDT", c: "123.45", ... }
+          if (msg.s && msg.c) {
+            const symbol = msg.s?.replace('USDT', '')
+
+            if (symbol && this.subscribedSymbols.includes(symbol)) {
+              const price = parseFloat(msg.c || '0')
+              if (price > 0) {
+                this.emitTicker({
+                  exchange: this.exchange,
+                  marketType: this.marketType,
+                  symbol,
+                  baseCurrency: 'USDT',
+                  bid: price * this.exchangeRate,
+                  ask: price * this.exchangeRate,
+                  last: price * this.exchangeRate,
+                  lastOriginal: price,
+                  timestamp: Date.now()
+                })
+              }
+            }
+          }
+        } catch {}
       })
 
-      this.ws.on('error', (err) => {
-        console.error('[MexcSpot] WebSocket 에러:', err.message)
-      })
-
-      this.ws.on('close', () => {
-        console.log('[MexcSpot] 연결 종료')
-        this.connected = false
-      })
+      this.ws.on('error', () => {})
+      this.ws.on('close', () => { this.connected = false })
     })
   }
 
@@ -96,8 +87,8 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
     this.subscribedSymbols = symbols
 
     if (this.ws?.readyState === WebSocket.OPEN) {
-      // Subscribe to mini ticker for each symbol
-      const params = symbols.slice(0, 100).map(s => `spot@public.miniTicker.v3.api@${s}USDT`)
+      // MEXC V3 API format
+      const params = symbols.slice(0, 100).map(s => `spot@public.miniTickers.v3.api@${s}USDT@UTC+8`)
 
       this.ws.send(JSON.stringify({
         method: 'SUBSCRIPTION',
@@ -109,10 +100,7 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
   }
 
   disconnect() {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval)
-      this.pingInterval = null
-    }
+    if (this.pingInterval) clearInterval(this.pingInterval)
     this.ws?.close()
     this.connected = false
   }

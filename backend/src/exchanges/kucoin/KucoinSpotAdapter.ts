@@ -8,15 +8,16 @@ export class KucoinSpotAdapter extends BaseExchangeAdapter {
   private ws: WebSocket | null = null
   private exchangeRate = 1380
   private pingInterval: ReturnType<typeof setInterval> | null = null
+  private connectId = 0
 
   setExchangeRate(rate: number) { this.exchangeRate = rate }
 
   async connect(): Promise<void> {
     try {
-      // Step 1: Get token from KuCoin API
       const res = await axios.post('https://api.kucoin.com/api/v1/bullet-public')
       const { token, instanceServers } = res.data.data
-      const endpoint = `${instanceServers[0].endpoint}?token=${token}`
+      const server = instanceServers[0]
+      const endpoint = `${server.endpoint}?token=${token}&connectId=${++this.connectId}`
 
       return new Promise((resolve) => {
         this.ws = new WebSocket(endpoint)
@@ -25,7 +26,8 @@ export class KucoinSpotAdapter extends BaseExchangeAdapter {
           console.log('[KucoinSpot] 연결됨')
           this.connected = true
 
-          // KuCoin requires ping every 30 seconds
+          // KuCoin pingInterval from server (default 30s)
+          const pingMs = server.pingInterval || 30000
           this.pingInterval = setInterval(() => {
             if (this.ws?.readyState === WebSocket.OPEN) {
               this.ws.send(JSON.stringify({
@@ -33,7 +35,7 @@ export class KucoinSpotAdapter extends BaseExchangeAdapter {
                 type: 'ping'
               }))
             }
-          }, 30000)
+          }, pingMs)
 
           resolve()
         })
@@ -42,10 +44,9 @@ export class KucoinSpotAdapter extends BaseExchangeAdapter {
           try {
             const msg = JSON.parse(data.toString())
 
-            // Handle ticker data
-            if (msg.type === 'message' && msg.topic?.startsWith('/market/ticker:') && msg.data) {
+            // KuCoin ticker message
+            if (msg.type === 'message' && msg.subject === 'trade.ticker' && msg.data) {
               const d = msg.data
-              // symbol format: "BTC-USDT" -> "BTC"
               const symbol = d.symbol?.replace('-USDT', '')
 
               if (symbol && this.subscribedSymbols.includes(symbol)) {
@@ -60,28 +61,19 @@ export class KucoinSpotAdapter extends BaseExchangeAdapter {
                     ask: price * this.exchangeRate,
                     last: price * this.exchangeRate,
                     lastOriginal: price,
-                    volume24h: parseFloat(d.size || d.vol || '0'),
                     timestamp: Date.now()
                   })
                 }
               }
             }
-          } catch {
-            // Skip parse errors
-          }
+          } catch {}
         })
 
-        this.ws.on('error', (err) => {
-          console.error('[KucoinSpot] WebSocket 에러:', err.message)
-        })
-
-        this.ws.on('close', () => {
-          console.log('[KucoinSpot] 연결 종료')
-          this.connected = false
-        })
+        this.ws.on('error', () => {})
+        this.ws.on('close', () => { this.connected = false })
       })
     } catch (err) {
-      console.error('[KucoinSpot] 연결 실패:', err)
+      console.error('[KucoinSpot] 연결 실패')
       this.connected = false
     }
   }
@@ -90,26 +82,26 @@ export class KucoinSpotAdapter extends BaseExchangeAdapter {
     this.subscribedSymbols = symbols
 
     if (this.ws?.readyState === WebSocket.OPEN) {
-      // KuCoin: subscribe to multiple tickers (max 100 per request)
-      // Format: /market/ticker:BTC-USDT,ETH-USDT,...
-      const pairs = symbols.slice(0, 100).map(s => `${s}-USDT`).join(',')
-
-      this.ws.send(JSON.stringify({
-        id: Date.now().toString(),
-        type: 'subscribe',
-        topic: `/market/ticker:${pairs}`,
-        response: true
-      }))
+      // KuCoin: 개별 심볼 구독
+      symbols.slice(0, 100).forEach((s, i) => {
+        setTimeout(() => {
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+              id: Date.now().toString(),
+              type: 'subscribe',
+              topic: `/market/ticker:${s}-USDT`,
+              response: false
+            }))
+          }
+        }, i * 50) // 50ms 간격으로 구독 (rate limit 방지)
+      })
 
       console.log(`[KucoinSpot] 구독: ${Math.min(symbols.length, 100)}개`)
     }
   }
 
   disconnect() {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval)
-      this.pingInterval = null
-    }
+    if (this.pingInterval) clearInterval(this.pingInterval)
     this.ws?.close()
     this.connected = false
   }

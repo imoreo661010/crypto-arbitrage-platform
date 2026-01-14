@@ -12,14 +12,12 @@ export class BybitSpotAdapter extends BaseExchangeAdapter {
 
   async connect(): Promise<void> {
     return new Promise((resolve) => {
-      // Bybit V5 public spot stream
       this.ws = new WebSocket('wss://stream.bybit.com/v5/public/spot')
 
       this.ws.on('open', () => {
         console.log('[BybitSpot] 연결됨')
         this.connected = true
 
-        // Ping every 20 seconds to keep connection alive
         this.pingInterval = setInterval(() => {
           if (this.ws?.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ op: 'ping' }))
@@ -33,10 +31,9 @@ export class BybitSpotAdapter extends BaseExchangeAdapter {
         try {
           const msg = JSON.parse(data.toString())
 
-          // Handle ticker data
-          if (msg.topic?.startsWith('tickers.') && msg.data) {
+          // Bybit V5 ticker response format
+          if (msg.topic && msg.data) {
             const d = msg.data
-            // symbol format: "BTCUSDT" -> "BTC"
             const symbol = d.symbol?.replace('USDT', '')
 
             if (symbol && this.subscribedSymbols.includes(symbol)) {
@@ -51,25 +48,16 @@ export class BybitSpotAdapter extends BaseExchangeAdapter {
                   ask: price * this.exchangeRate,
                   last: price * this.exchangeRate,
                   lastOriginal: price,
-                  volume24h: parseFloat(d.volume24h || '0'),
                   timestamp: Date.now()
                 })
               }
             }
           }
-        } catch {
-          // Skip parse errors
-        }
+        } catch {}
       })
 
-      this.ws.on('error', (err) => {
-        console.error('[BybitSpot] WebSocket 에러:', err.message)
-      })
-
-      this.ws.on('close', () => {
-        console.log('[BybitSpot] 연결 종료')
-        this.connected = false
-      })
+      this.ws.on('error', () => {})
+      this.ws.on('close', () => { this.connected = false })
     })
   }
 
@@ -77,26 +65,20 @@ export class BybitSpotAdapter extends BaseExchangeAdapter {
     this.subscribedSymbols = symbols
 
     if (this.ws?.readyState === WebSocket.OPEN) {
-      // Subscribe in batches of 10 (Bybit limit)
-      const batchSize = 10
-      for (let i = 0; i < Math.min(symbols.length, 100); i += batchSize) {
-        const batch = symbols.slice(i, i + batchSize)
-        const args = batch.map(s => `tickers.${s}USDT`)
+      // Bybit: 개별 심볼로 구독
+      const args = symbols.slice(0, 100).map(s => `tickers.${s}USDT`)
 
-        this.ws.send(JSON.stringify({
-          op: 'subscribe',
-          args
-        }))
-      }
-      console.log(`[BybitSpot] 구독: ${Math.min(symbols.length, 100)}개`)
+      this.ws.send(JSON.stringify({
+        op: 'subscribe',
+        args
+      }))
+
+      console.log(`[BybitSpot] 구독: ${args.length}개`)
     }
   }
 
   disconnect() {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval)
-      this.pingInterval = null
-    }
+    if (this.pingInterval) clearInterval(this.pingInterval)
     this.ws?.close()
     this.connected = false
   }

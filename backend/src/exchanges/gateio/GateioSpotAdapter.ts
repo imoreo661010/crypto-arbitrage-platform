@@ -18,7 +18,6 @@ export class GateioSpotAdapter extends BaseExchangeAdapter {
         console.log('[GateioSpot] 연결됨')
         this.connected = true
 
-        // Gate.io requires ping every 30 seconds
         this.pingInterval = setInterval(() => {
           if (this.ws?.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({
@@ -35,10 +34,9 @@ export class GateioSpotAdapter extends BaseExchangeAdapter {
         try {
           const msg = JSON.parse(data.toString())
 
-          // Handle ticker updates
-          if (msg.channel === 'spot.tickers' && msg.event === 'update' && msg.result) {
+          // Gate.io ticker update
+          if (msg.channel === 'spot.tickers' && msg.result) {
             const result = msg.result
-            // currency_pair format: "BTC_USDT" -> "BTC"
             const symbol = result.currency_pair?.replace('_USDT', '')
 
             if (symbol && this.subscribedSymbols.includes(symbol)) {
@@ -53,25 +51,16 @@ export class GateioSpotAdapter extends BaseExchangeAdapter {
                   ask: price * this.exchangeRate,
                   last: price * this.exchangeRate,
                   lastOriginal: price,
-                  volume24h: parseFloat(result.base_volume || '0'),
                   timestamp: Date.now()
                 })
               }
             }
           }
-        } catch {
-          // Skip parse errors
-        }
+        } catch {}
       })
 
-      this.ws.on('error', (err) => {
-        console.error('[GateioSpot] WebSocket 에러:', err.message)
-      })
-
-      this.ws.on('close', () => {
-        console.log('[GateioSpot] 연결 종료')
-        this.connected = false
-      })
+      this.ws.on('error', () => {})
+      this.ws.on('close', () => { this.connected = false })
     })
   }
 
@@ -79,25 +68,22 @@ export class GateioSpotAdapter extends BaseExchangeAdapter {
     this.subscribedSymbols = symbols
 
     if (this.ws?.readyState === WebSocket.OPEN) {
-      // Gate.io allows subscribing to multiple pairs at once
-      const pairs = symbols.slice(0, 100).map(s => `${s}_USDT`)
+      // Gate.io: 개별 구독
+      symbols.slice(0, 100).forEach(s => {
+        this.ws!.send(JSON.stringify({
+          time: Math.floor(Date.now() / 1000),
+          channel: 'spot.tickers',
+          event: 'subscribe',
+          payload: [`${s}_USDT`]
+        }))
+      })
 
-      this.ws.send(JSON.stringify({
-        time: Math.floor(Date.now() / 1000),
-        channel: 'spot.tickers',
-        event: 'subscribe',
-        payload: pairs
-      }))
-
-      console.log(`[GateioSpot] 구독: ${pairs.length}개`)
+      console.log(`[GateioSpot] 구독: ${Math.min(symbols.length, 100)}개`)
     }
   }
 
   disconnect() {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval)
-      this.pingInterval = null
-    }
+    if (this.pingInterval) clearInterval(this.pingInterval)
     this.ws?.close()
     this.connected = false
   }
