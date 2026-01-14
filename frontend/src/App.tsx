@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useWebSocket } from './hooks/useWebSocket'
 import { NormalizedTicker } from './types/index'
+import { GapChart } from './components/GapChart'
 
 type Menu = 'arbitrage' | 'top10' | 'upbit' | 'binance' | 'binance-futures' | 'bybit' | 'okx' | 'mexc' | 'gateio' | 'bitget' | 'kucoin'
 
@@ -43,6 +44,9 @@ function App() {
   const [alertEnabled, setAlertEnabled] = useState(false)
   const [alertGap, setAlertGap] = useState(3.0)
   const [lastAlertTime, setLastAlertTime] = useState(0)
+
+  // 차트 모달용 상태 (클릭한 코인)
+  const [selectedCoinForChart, setSelectedCoinForChart] = useState<string | null>(null)
 
   useEffect(() => {
     if (!socket) return
@@ -288,7 +292,11 @@ function App() {
             ) : (
               <div className="space-y-4">
                 {top10.map((g, i) => (
-                  <div key={g.symbol} className="bg-gray-800 rounded-lg p-6 border-2 border-gray-700 hover:border-blue-500">
+                  <div
+                    key={g.symbol}
+                    className="bg-gray-800 rounded-lg p-6 border-2 border-gray-700 hover:border-blue-500 cursor-pointer"
+                    onClick={() => setSelectedCoinForChart(g.symbol)}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="text-4xl font-bold text-gray-600">#{i + 1}</div>
@@ -339,6 +347,14 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* 차트 모달 - 코인 클릭 시 표시 */}
+      {selectedCoinForChart && (
+        <GapChart
+          symbol={selectedCoinForChart}
+          onClose={() => setSelectedCoinForChart(null)}
+        />
+      )}
     </div>
   )
 }
