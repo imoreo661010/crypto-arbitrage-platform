@@ -44,7 +44,13 @@ export class KucoinSpotAdapter extends BaseExchangeAdapter {
           try {
             const msg = JSON.parse(data.toString())
 
+            // 디버그: 첫 몇 개 메시지 로그 (나중에 제거)
+            if (Math.random() < 0.001) {
+              console.log('[KucoinSpot] 메시지:', JSON.stringify(msg).slice(0, 200))
+            }
+
             // KuCoin ticker message
+            // 문서 기준: { type: "message", subject: "trade.ticker", data: { price: "..." } }
             if (msg.type === 'message' && msg.subject === 'trade.ticker' && msg.data) {
               const d = msg.data
               const symbol = d.symbol?.replace('-USDT', '')
@@ -90,7 +96,7 @@ export class KucoinSpotAdapter extends BaseExchangeAdapter {
               id: Date.now().toString(),
               type: 'subscribe',
               topic: `/market/ticker:${s}-USDT`,
-              response: false
+              response: true  // 구독 확인 받기
             }))
           }
         }, i * 50) // 50ms 간격으로 구독 (rate limit 방지)

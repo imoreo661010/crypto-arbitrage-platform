@@ -32,7 +32,8 @@ export class BybitSpotAdapter extends BaseExchangeAdapter {
           const msg = JSON.parse(data.toString())
 
           // Bybit V5 ticker response format
-          if (msg.topic && msg.data) {
+          // msg.topic이 'tickers.'로 시작하는지 확인 (pong, 구독확인 등 다른 메시지 제외)
+          if (msg.topic?.startsWith('tickers.') && msg.data) {
             const d = msg.data
             const symbol = d.symbol?.replace('USDT', '')
 

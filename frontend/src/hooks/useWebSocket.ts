@@ -1,37 +1,41 @@
 import { useEffect, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 
-const BACKEND_URL = 'http://localhost:3000'
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 export const useWebSocket = () => {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
-    console.log('[WebSocket] 서버 연결 시도:', BACKEND_URL)
+    console.log('[WebSocket] 서버 연결 시도:', SOCKET_URL)
     
-    const newSocket = io(BACKEND_URL)
+    const newSocket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 10
+    })
 
     newSocket.on('connect', () => {
-      console.log('[WebSocket] ✅ 서버 연결 성공!')
+      console.log('[WebSocket] 연결 성공!')
       setConnected(true)
     })
 
     newSocket.on('disconnect', () => {
-      console.log('[WebSocket] ❌ 서버 연결 끊김')
+      console.log('[WebSocket] 연결 종료')
       setConnected(false)
     })
 
     newSocket.on('connect_error', (error) => {
-      console.error('[WebSocket] 연결 오류:', error.message)
+      console.log('[WebSocket] 연결 오류:', error.message)
       setConnected(false)
     })
 
     setSocket(newSocket)
 
-    // 컴포넌트 언마운트 시 연결 종료
     return () => {
-      console.log('[WebSocket] 연결 종료')
       newSocket.close()
     }
   }, [])
