@@ -62,8 +62,13 @@ export class BybitSpotAdapter extends BaseExchangeAdapter {
         } catch {}
       })
 
-      this.ws.on('error', () => {})
-      this.ws.on('close', () => { this.connected = false })
+      this.ws.on('error', (err) => {
+        console.error('[BybitSpot] 에러:', err.message)
+      })
+      this.ws.on('close', (code, reason) => {
+        console.log(`[BybitSpot] 연결 종료: ${code} - ${reason}`)
+        this.connected = false
+      })
     })
   }
 

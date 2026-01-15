@@ -39,29 +39,36 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
             console.log('[MexcSpot] 메시지:', raw.slice(0, 300))
           }
 
-          // MEXC miniTicker 응답 형식 (문서 기준):
+          // MEXC bookTicker 응답 형식:
           // {
-          //   "channel": "spot@public.miniTicker.v3.api.pb@BTCUSDT@UTC+8",
+          //   "channel": "spot@public.bookTicker.v3.api@BTCUSDT",
           //   "symbol": "BTCUSDT",
-          //   "publicMiniTicker": {
-          //     "symbol": "BTCUSDT",
-          //     "price": "95000.5"
+          //   "data": {
+          //     "A": "93387.29",  // best ask price
+          //     "a": "7.669875",  // best ask qty
+          //     "B": "93387.28",  // best bid price
+          //     "b": "3.73485"    // best bid qty
           //   }
           // }
-          if (msg.publicMiniTicker) {
-            const ticker = msg.publicMiniTicker
-            const symbol = ticker.symbol?.replace('USDT', '')
+          // 또는 publicBookTicker 형식
+          if (msg.data && msg.symbol) {
+            const symbol = msg.symbol?.replace('USDT', '')
+            const d = msg.data
 
             if (symbol && this.subscribedSymbols.includes(symbol)) {
-              const price = parseFloat(ticker.price || '0')
+              // A = ask price, B = bid price
+              const askPrice = parseFloat(d.A || d.askprice || '0')
+              const bidPrice = parseFloat(d.B || d.bidprice || '0')
+              const price = askPrice > 0 ? askPrice : bidPrice
+
               if (price > 0) {
                 this.emitTicker({
                   exchange: this.exchange,
                   marketType: this.marketType,
                   symbol,
                   baseCurrency: 'USDT',
-                  bid: price * this.exchangeRate,
-                  ask: price * this.exchangeRate,
+                  bid: bidPrice * this.exchangeRate,
+                  ask: askPrice * this.exchangeRate,
                   last: price * this.exchangeRate,
                   lastOriginal: price,
                   timestamp: Date.now()
@@ -70,19 +77,24 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
             }
           }
 
-          // 혹시 다른 형식으로 오는 경우 대비 (d.s, d.c 형식)
-          if (msg.d && msg.d.s && msg.d.c) {
-            const symbol = msg.d.s?.replace('USDT', '')
+          // publicBookTicker 형식 대응
+          if (msg.publicbookticker && msg.symbol) {
+            const symbol = msg.symbol?.replace('USDT', '')
+            const d = msg.publicbookticker
+
             if (symbol && this.subscribedSymbols.includes(symbol)) {
-              const price = parseFloat(msg.d.c || '0')
+              const askPrice = parseFloat(d.askprice || '0')
+              const bidPrice = parseFloat(d.bidprice || '0')
+              const price = askPrice > 0 ? askPrice : bidPrice
+
               if (price > 0) {
                 this.emitTicker({
                   exchange: this.exchange,
                   marketType: this.marketType,
                   symbol,
                   baseCurrency: 'USDT',
-                  bid: price * this.exchangeRate,
-                  ask: price * this.exchangeRate,
+                  bid: bidPrice * this.exchangeRate,
+                  ask: askPrice * this.exchangeRate,
                   last: price * this.exchangeRate,
                   lastOriginal: price,
                   timestamp: Date.now()
@@ -93,8 +105,13 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
         } catch {}
       })
 
-      this.ws.on('error', () => {})
-      this.ws.on('close', () => { this.connected = false })
+      this.ws.on('error', (err) => {
+        console.error('[MexcSpot] 에러:', err.message)
+      })
+      this.ws.on('close', (code, reason) => {
+        console.log(`[MexcSpot] 연결 종료: ${code} - ${reason}`)
+        this.connected = false
+      })
     })
   }
 
@@ -102,12 +119,10 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
     this.subscribedSymbols = symbols
 
     if (this.ws?.readyState === WebSocket.OPEN) {
-      // MEXC V3 API 정확한 형식 (문서 기준):
-      // spot@public.miniTicker.v3.api.pb@<SYMBOL>@<TIMEZONE>
-      // - miniTicker (s 없음!)
-      // - .pb 추가 (Protobuf)
-      const params = symbols.slice(0, 30).map(s =>
-        `spot@public.miniTicker.v3.api.pb@${s}USDT@UTC+8`
+      // MEXC bookTicker 구독 형식:
+      // spot@public.bookTicker.v3.api@<SYMBOL>
+      const params = symbols.slice(0, 50).map(s =>
+        `spot@public.bookTicker.v3.api@${s}USDT`
       )
 
       this.ws.send(JSON.stringify({
@@ -115,7 +130,7 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
         params
       }))
 
-      console.log(`[MexcSpot] 구독: ${params.length}개`)
+      console.log(`[MexcSpot] 구독: ${params.length}개 (bookTicker)`)
     }
   }
 
