@@ -31,6 +31,11 @@ export class BybitSpotAdapter extends BaseExchangeAdapter {
         try {
           const msg = JSON.parse(data.toString())
 
+          // 디버그: 메시지 샘플링
+          if (Math.random() < 0.01) {
+            console.log('[BybitSpot] 메시지:', JSON.stringify(msg).slice(0, 300))
+          }
+
           // Bybit V5 ticker response format
           // msg.topic이 'tickers.'로 시작하는지 확인 (pong, 구독확인 등 다른 메시지 제외)
           if (msg.topic?.startsWith('tickers.') && msg.data) {

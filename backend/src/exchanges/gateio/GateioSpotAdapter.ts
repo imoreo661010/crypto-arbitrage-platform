@@ -34,6 +34,11 @@ export class GateioSpotAdapter extends BaseExchangeAdapter {
         try {
           const msg = JSON.parse(data.toString())
 
+          // 디버그: 메시지 샘플링
+          if (Math.random() < 0.01) {
+            console.log('[GateioSpot] 메시지:', JSON.stringify(msg).slice(0, 300))
+          }
+
           // Gate.io ticker update
           if (msg.channel === 'spot.tickers' && msg.result) {
             const result = msg.result

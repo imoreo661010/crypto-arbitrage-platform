@@ -31,7 +31,13 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
 
       this.ws.on('message', (data: Buffer) => {
         try {
-          const msg = JSON.parse(data.toString())
+          const raw = data.toString()
+          const msg = JSON.parse(raw)
+
+          // 디버그: 메시지 샘플링 (PONG 제외)
+          if (Math.random() < 0.01 && !raw.includes('PONG')) {
+            console.log('[MexcSpot] 메시지:', raw.slice(0, 300))
+          }
 
           // MEXC miniTicker 응답 형식 (문서 기준):
           // {
