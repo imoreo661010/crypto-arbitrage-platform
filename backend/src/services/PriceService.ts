@@ -1,11 +1,10 @@
 import { NormalizedTicker } from '../types/index.js'
 
-// 심볼 충돌로 인한 잘못된 가격 방지 (거래소별 제외 목록)
-const EXCLUDED_SYMBOLS: Record<string, string[]> = {
-  'mexc': ['GAS'],      // MEXC의 GAS는 다른 토큰
-  'bybit': ['BEAM'],    // Bybit의 BEAM은 다른 프로젝트
-  'gateio': ['BEAM'],   // Gate.io의 BEAM도 다른 프로젝트
-}
+// 심볼 충돌로 인해 완전히 제외할 심볼 (모든 거래소에서 제외)
+const GLOBALLY_EXCLUDED_SYMBOLS = ['BEAM', 'GAS']
+
+// 거래소별 추가 제외 목록
+const EXCLUDED_SYMBOLS: Record<string, string[]> = {}
 
 export class PriceService {
   // 가격 저장소: Map<"symbol-exchange-marketType", NormalizedTicker>
@@ -17,6 +16,11 @@ export class PriceService {
   updatePrice(ticker: NormalizedTicker): void {
     const { symbol, exchange, marketType } = ticker
     const key = `${symbol}-${exchange}-${marketType}`
+
+    // 전역 제외 심볼 체크
+    if (GLOBALLY_EXCLUDED_SYMBOLS.includes(symbol)) {
+      return // 무시
+    }
 
     // 거래소별 제외 심볼 체크
     if (EXCLUDED_SYMBOLS[exchange]?.includes(symbol)) {
