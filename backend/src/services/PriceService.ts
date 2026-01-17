@@ -1,5 +1,12 @@
 import { NormalizedTicker } from '../types/index.js'
 
+// 심볼 충돌로 인한 잘못된 가격 방지 (거래소별 제외 목록)
+const EXCLUDED_SYMBOLS: Record<string, string[]> = {
+  'mexc': ['GAS'],      // MEXC의 GAS는 다른 토큰
+  'bybit': ['BEAM'],    // Bybit의 BEAM은 다른 프로젝트
+  'gateio': ['BEAM'],   // Gate.io의 BEAM도 다른 프로젝트
+}
+
 export class PriceService {
   // 가격 저장소: Map<"symbol-exchange-marketType", NormalizedTicker>
   private prices: Map<string, NormalizedTicker> = new Map()
@@ -11,12 +18,43 @@ export class PriceService {
     const { symbol, exchange, marketType } = ticker
     const key = `${symbol}-${exchange}-${marketType}`
 
+    // 거래소별 제외 심볼 체크
+    if (EXCLUDED_SYMBOLS[exchange]?.includes(symbol)) {
+      return // 무시
+    }
+
+    // 이상치 필터링: 동일 심볼의 다른 거래소 가격과 비교
+    const existingPrices = this.getPricesForSymbol(symbol)
+    if (existingPrices.length > 0) {
+      const avgPrice = existingPrices.reduce((sum, p) => sum + p.last, 0) / existingPrices.length
+      const diff = Math.abs(ticker.last - avgPrice) / avgPrice
+
+      // 평균 가격과 500% 이상 차이나면 제외 (심볼 충돌 가능성)
+      if (diff > 5) {
+        console.log(`[PriceService] 이상치 제외: ${key} ₩${ticker.last.toLocaleString()} (평균: ₩${avgPrice.toLocaleString()})`)
+        return
+      }
+    }
+
     this.prices.set(key, ticker)
 
     // 로그는 1% 확률로만
     if (Math.random() < 0.01) {
       console.log(`[PriceService] ${key}: ₩${ticker.last.toLocaleString()}`)
     }
+  }
+
+  /**
+   * 특정 심볼의 모든 가격 조회
+   */
+  private getPricesForSymbol(symbol: string): NormalizedTicker[] {
+    const result: NormalizedTicker[] = []
+    this.prices.forEach((ticker) => {
+      if (ticker.symbol === symbol) {
+        result.push(ticker)
+      }
+    })
+    return result
   }
 
   /**
