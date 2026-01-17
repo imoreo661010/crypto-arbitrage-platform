@@ -24,8 +24,8 @@ export class BybitSpotAdapter extends BaseExchangeAdapter {
       clearInterval(this.pollInterval)
     }
 
-    // 3초마다 가격 조회
-    this.pollInterval = setInterval(() => this.fetchPrices(), 3000)
+    // 5초마다 가격 조회 (메모리 절약)
+    this.pollInterval = setInterval(() => this.fetchPrices(), 5000)
 
     // 즉시 한 번 실행
     this.fetchPrices()
