@@ -24,8 +24,8 @@ export class MexcSpotAdapter extends BaseExchangeAdapter {
       clearInterval(this.pollInterval)
     }
 
-    // 5초마다 가격 조회 (메모리 절약)
-    this.pollInterval = setInterval(() => this.fetchPrices(), 5000)
+    // 1초마다 가격 조회
+    this.pollInterval = setInterval(() => this.fetchPrices(), 1000)
 
     // 즉시 한 번 실행
     this.fetchPrices()
