@@ -5,6 +5,9 @@ import { GapChart } from './components/GapChart'
 
 type Menu = 'arbitrage' | 'top10' | 'upbit' | 'binance' | 'binance-futures' | 'bybit' | 'okx' | 'mexc' | 'gateio' | 'bitget' | 'kucoin'
 
+// 심볼 충돌로 인해 제외할 심볼 (거래소마다 다른 코인)
+const EXCLUDED_SYMBOLS = ['BEAM', 'GAS']
+
 interface Gap {
   symbol: string
   low: NormalizedTicker
@@ -82,6 +85,9 @@ function App() {
   const allGaps = useMemo(() => {
     const symbolMap = new Map<string, NormalizedTicker[]>()
     prices.forEach(ticker => {
+      // 제외 심볼 필터링
+      if (EXCLUDED_SYMBOLS.includes(ticker.symbol)) return
+
       if (!symbolMap.has(ticker.symbol)) symbolMap.set(ticker.symbol, [])
       symbolMap.get(ticker.symbol)!.push(ticker)
     })
